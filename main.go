@@ -207,7 +207,8 @@ func main() {
 		for i := range teamLabels {
 			teamLabels[i] = strings.TrimSpace(teamLabels[i])
 		}
-		teamFilter := fmt.Sprintf(` AND team in ("%s")`, strings.Join(teamLabels, `","`))
+		// Use cf[Team] syntax for team field
+		teamFilter := fmt.Sprintf(` AND cf[Team] in ("%s")`, strings.Join(teamLabels, `","`))
 		jql += teamFilter
 	}
 
@@ -230,6 +231,11 @@ func main() {
 			current = current.AddDate(0, 1, 0)
 		}
 	}
+
+	// Print debug info about the search
+	fmt.Printf("\nDebug Info:\n")
+	fmt.Printf("Teams filter: %s\n", *teams)
+	fmt.Printf("JQL Query:\n%s\n\n", jql)
 
 	// Search issues with pagination
 	var startAt int
