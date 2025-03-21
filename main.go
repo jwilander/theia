@@ -121,30 +121,37 @@ func printAnalysisTable(results []TicketAnalysis, period string) {
 	if period != "" {
 		fmt.Printf("\n%s\n", period)
 	}
-	fmt.Printf("%-20s %-10s %-15s %-15s %-15s\n",
+	fmt.Printf("%-20s %-10s %-15s %-15s %-15s %-15s\n",
 		"Issue Type",
 		"Count",
 		"Total Mana",
+		"% of Total",
 		"Avg Mana",
 		"Median Mana")
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Println(strings.Repeat("-", 95))
 
 	// Print results
 	for _, r := range results {
-		fmt.Printf("%-20s %-10d %-15.2f %-15.2f %-15.2f\n",
+		percentOfTotal := 0.0
+		if totalMana > 0 {
+			percentOfTotal = (r.TotalMana / totalMana) * 100
+		}
+		fmt.Printf("%-20s %-10d %-15.2f %-15.1f%% %-15.2f %-15.2f\n",
 			r.IssueType,
 			r.Count,
 			r.TotalMana,
+			percentOfTotal,
 			r.AverageMana,
 			r.MedianMana)
 	}
 
 	// Print totals
-	fmt.Println(strings.Repeat("-", 80))
-	fmt.Printf("%-20s %-10d %-15.2f %-15.2f %-15.2f\n",
+	fmt.Println(strings.Repeat("-", 95))
+	fmt.Printf("%-20s %-10d %-15.2f %-15s %-15.2f %-15.2f\n",
 		"TOTAL",
 		totalCount,
 		totalMana,
+		"100.0%",
 		overallAvgMana,
 		overallMedianMana)
 }
@@ -230,10 +237,6 @@ func main() {
 			current = current.AddDate(0, 1, 0)
 		}
 	}
-
-	// Print debug info about the search
-	fmt.Printf("\nDebug Info:\n")
-	fmt.Printf("JQL Query:\n%s\n\n", jql)
 
 	// Search issues with pagination
 	var startAt int
