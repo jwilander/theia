@@ -241,7 +241,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "customfield_10001"},
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "customfield_10800"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
@@ -275,8 +275,8 @@ func main() {
 				team := "No Team"
 				fmt.Printf("Debug - Issue %s:\n", issue.Key)
 				fmt.Printf("  All Fields: %+v\n", issue.Fields)
-				fmt.Printf("  Raw Team Field: %+v\n", issue.Fields.Unknowns["customfield_10001"])
-				if teamField := issue.Fields.Unknowns["customfield_10001"]; teamField != nil {
+				fmt.Printf("  Raw Team Field: %+v\n", issue.Fields.Unknowns["customfield_10800"])
+				if teamField := issue.Fields.Unknowns["customfield_10800"]; teamField != nil {
 					fmt.Printf("  Team Field Type: %T\n", teamField)
 					if teamObj, ok := teamField.(map[string]interface{}); ok {
 						if teamName, ok := teamObj["name"].(string); ok && teamName != "" {
