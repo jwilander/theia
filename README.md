@@ -45,9 +45,6 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ"
 
 # For monthly breakdown
 go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -monthly
-
-# For specific teams
-go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams "Team A,Team B"
 ```
 
 ### Command Line Arguments
@@ -56,7 +53,6 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams "Tea
 - `-start`: Start date in YYYY-MM-DD format
 - `-end`: End date in YYYY-MM-DD format
 - `-monthly`: Optional flag to show month-by-month breakdown
-- `-teams`: Optional comma-separated list of team names to filter by (e.g., "Team A,Team B"). Uses the JIRA Team field.
 
 ## Output
 

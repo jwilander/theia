@@ -150,7 +150,6 @@ func main() {
 	endDate := flag.String("end", "", "End date (YYYY-MM-DD)")
 	projectKey := flag.String("project", "", "JIRA project key (e.g., PROJ)")
 	monthly := flag.Bool("monthly", false, "Show monthly breakdown")
-	teams := flag.String("teams", "", "Comma-separated list of team labels to filter by")
 	flag.Parse()
 
 	// Validate flags
@@ -196,24 +195,11 @@ func main() {
 		resolutiondate >= "%s" AND
 		resolutiondate <= "%s" AND
 		"Mana Spent" is not EMPTY AND
-		issuetype not in (Epic, Initiative)`,
+		issuetype not in (Epic, Initiative)
+		ORDER BY created DESC`,
 		*projectKey,
 		start.Format("2006-01-02"),
 		end.Format("2006-01-02"))
-
-	// Add team filter if specified
-	if *teams != "" {
-		teamLabels := strings.Split(*teams, ",")
-		for i := range teamLabels {
-			teamLabels[i] = strings.TrimSpace(teamLabels[i])
-		}
-		// Use cf[Team] syntax for team field
-		teamFilter := fmt.Sprintf(` AND cf[Team] in ("%s")`, strings.Join(teamLabels, `","`))
-		jql += teamFilter
-	}
-
-	// Add sort order
-	jql += " ORDER BY created DESC"
 
 	// Initialize analysis maps
 	analysis := make(map[string]*TicketAnalysis)
@@ -234,7 +220,6 @@ func main() {
 
 	// Print debug info about the search
 	fmt.Printf("\nDebug Info:\n")
-	fmt.Printf("Teams filter: %s\n", *teams)
 	fmt.Printf("JQL Query:\n%s\n\n", jql)
 
 	// Search issues with pagination
@@ -243,7 +228,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "team"},
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
