@@ -165,6 +165,7 @@ func main() {
 	projectKey := flag.String("project", "", "JIRA project key (e.g., PROJ)")
 	monthly := flag.Bool("monthly", false, "Show monthly breakdown")
 	teams := flag.Bool("teams", false, "Group results by team")
+	brokenWindows := flag.Bool("broken-windows", false, "Consider tickets with ux-broken-window label as separate type")
 	flag.Parse()
 
 	// Validate flags
@@ -246,7 +247,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "customfield_10800"},
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "customfield_10800", "labels"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
@@ -261,6 +262,17 @@ func main() {
 		// Process issues
 		for _, issue := range issues {
 			issueType := normalizeIssueType(issue.Fields.Type.Name)
+
+			// Check for broken window label if flag is enabled
+			if *brokenWindows {
+				for _, label := range issue.Fields.Labels {
+					if label == "ux-broken-window" {
+						issueType = "Broken Window"
+						break
+					}
+				}
+			}
+
 			manaField := issue.Fields.Unknowns["customfield_11267"]
 			manaSpent := getManaPoints(manaField)
 
