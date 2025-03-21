@@ -273,25 +273,13 @@ func main() {
 			// Update team analysis if enabled
 			if *teams {
 				team := "No Team"
-				fmt.Printf("Debug - Issue %s:\n", issue.Key)
-				fmt.Printf("  All Fields: %+v\n", issue.Fields)
-				fmt.Printf("  Raw Team Field: %+v\n", issue.Fields.Unknowns["customfield_10800"])
 				if teamField := issue.Fields.Unknowns["customfield_10800"]; teamField != nil {
-					fmt.Printf("  Team Field Type: %T\n", teamField)
 					if teamObj, ok := teamField.(map[string]interface{}); ok {
 						if teamName, ok := teamObj["name"].(string); ok && teamName != "" {
 							team = teamName
-							fmt.Printf("  Parsed Team Name: %s\n", team)
-						} else {
-							fmt.Printf("  Could not get team name from object\n")
 						}
-					} else {
-						fmt.Printf("  Could not parse team field as object\n")
 					}
-				} else {
-					fmt.Printf("  Team field is nil\n")
 				}
-				fmt.Printf("  Final Team Value: %s\n\n", team)
 
 				// Find or create team analysis
 				var teamAnalysis *TeamAnalysis
