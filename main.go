@@ -17,6 +17,13 @@ type TicketAnalysis struct {
 	Count       int
 	TotalMana   float64
 	AverageMana float64
+	MedianMana  float64
+	ManaValues  []float64 // Store individual mana values for median calculation
+}
+
+type MonthlyAnalysis struct {
+	Month    time.Time
+	Analysis map[string]*TicketAnalysis
 }
 
 // getManaPoints converts the Mana Spent select value to story points
@@ -57,14 +64,97 @@ func getManaPoints(manaValue interface{}) float64 {
 	}
 }
 
+// normalizeIssueType converts Task and Sub-task types to Story
+func normalizeIssueType(issueType string) string {
+	switch issueType {
+	case "Task", "Sub-task":
+		return "Story"
+	default:
+		return issueType
+	}
+}
+
+// calculateMedian returns the median value from a slice of float64
+func calculateMedian(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	// Create a copy to avoid modifying the original slice
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+
+	// If odd number of values
+	if len(sorted)%2 == 1 {
+		return sorted[len(sorted)/2]
+	}
+
+	// If even number of values
+	mid := len(sorted) / 2
+	return (sorted[mid-1] + sorted[mid]) / 2
+}
+
+// printAnalysisTable prints the analysis results in a formatted table
+func printAnalysisTable(results []TicketAnalysis, period string) {
+	// Calculate totals
+	var totalCount int
+	var totalMana float64
+	var allManaValues []float64
+	for _, r := range results {
+		totalCount += r.Count
+		totalMana += r.TotalMana
+		allManaValues = append(allManaValues, r.ManaValues...)
+	}
+	overallAvgMana := 0.0
+	if totalCount > 0 {
+		overallAvgMana = totalMana / float64(totalCount)
+	}
+	overallMedianMana := calculateMedian(allManaValues)
+
+	// Print header
+	if period != "" {
+		fmt.Printf("\n%s\n", period)
+	}
+	fmt.Printf("%-20s %-10s %-15s %-15s %-15s\n",
+		"Issue Type",
+		"Count",
+		"Total Mana",
+		"Avg Mana",
+		"Median Mana")
+	fmt.Println(strings.Repeat("-", 80))
+
+	// Print results
+	for _, r := range results {
+		fmt.Printf("%-20s %-10d %-15.2f %-15.2f %-15.2f\n",
+			r.IssueType,
+			r.Count,
+			r.TotalMana,
+			r.AverageMana,
+			r.MedianMana)
+	}
+
+	// Print totals
+	fmt.Println(strings.Repeat("-", 80))
+	fmt.Printf("%-20s %-10d %-15.2f %-15.2f %-15.2f\n",
+		"TOTAL",
+		totalCount,
+		totalMana,
+		overallAvgMana,
+		overallMedianMana)
+}
+
 func main() {
-	// Command line flags for dates only
+	// Command line flags
 	startDate := flag.String("start", "", "Start date (YYYY-MM-DD)")
 	endDate := flag.String("end", "", "End date (YYYY-MM-DD)")
+	projectKey := flag.String("project", "", "JIRA project key (e.g., PROJ)")
+	monthly := flag.Bool("monthly", false, "Show monthly breakdown")
+	teams := flag.String("teams", "", "Comma-separated list of team labels to filter by")
 	flag.Parse()
 
-	// Validate date flags
-	if *startDate == "" || *endDate == "" {
+	// Validate flags
+	if *startDate == "" || *endDate == "" || *projectKey == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -99,18 +189,47 @@ func main() {
 		log.Fatalf("Invalid end date format: %v", err)
 	}
 
-	// Create JQL query
-	jql := fmt.Sprintf(`status in (Resolved, Closed) AND
+	// Create base JQL query
+	jql := fmt.Sprintf(`project = "%s" AND
+		status in (Resolved, Closed) AND
+		resolution not in ("Won't Do", "Invalid", "Duplicate") AND
 		resolutiondate >= "%s" AND
 		resolutiondate <= "%s" AND
 		"Mana Spent" is not EMPTY AND
-		issuetype not in (Epic, Initiative)
-		ORDER BY created DESC`,
+		issuetype not in (Epic, Initiative)`,
+		*projectKey,
 		start.Format("2006-01-02"),
 		end.Format("2006-01-02"))
 
-	// Initialize analysis map
+	// Add team filter if specified
+	if *teams != "" {
+		teamLabels := strings.Split(*teams, ",")
+		for i := range teamLabels {
+			teamLabels[i] = strings.TrimSpace(teamLabels[i])
+		}
+		teamFilter := fmt.Sprintf(` AND team in ("%s")`, strings.Join(teamLabels, `","`))
+		jql += teamFilter
+	}
+
+	// Add sort order
+	jql += " ORDER BY created DESC"
+
+	// Initialize analysis maps
 	analysis := make(map[string]*TicketAnalysis)
+	var monthlyAnalyses []MonthlyAnalysis
+	if *monthly {
+		// Create a map for each month in the date range
+		current := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, start.Location())
+		endMonth := time.Date(end.Year(), end.Month(), 1, 0, 0, 0, 0, end.Location())
+
+		for !current.After(endMonth) {
+			monthlyAnalyses = append(monthlyAnalyses, MonthlyAnalysis{
+				Month:    current,
+				Analysis: make(map[string]*TicketAnalysis),
+			})
+			current = current.AddDate(0, 1, 0)
+		}
+	}
 
 	// Search issues with pagination
 	var startAt int
@@ -118,7 +237,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267"}, // Mana Spent field ID
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "team"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
@@ -132,18 +251,44 @@ func main() {
 
 		// Process issues
 		for _, issue := range issues {
-			issueType := issue.Fields.Type.Name
-			manaField := issue.Fields.Unknowns["customfield_10000"]
+			issueType := normalizeIssueType(issue.Fields.Type.Name)
+			manaField := issue.Fields.Unknowns["customfield_11267"]
 			manaSpent := getManaPoints(manaField)
 
+			// Update overall analysis
 			if _, exists := analysis[issueType]; !exists {
 				analysis[issueType] = &TicketAnalysis{
-					IssueType: issueType,
+					IssueType:  issueType,
+					ManaValues: make([]float64, 0),
 				}
 			}
-
 			analysis[issueType].Count++
 			analysis[issueType].TotalMana += manaSpent
+			analysis[issueType].ManaValues = append(analysis[issueType].ManaValues, manaSpent)
+
+			// Update monthly analysis if enabled
+			if *monthly {
+				resolutionDate := time.Time(issue.Fields.Resolutiondate)
+
+				for i := range monthlyAnalyses {
+					maStart := monthlyAnalyses[i].Month
+					maEnd := maStart.AddDate(0, 1, 0).Add(-time.Second)
+
+					if (resolutionDate.After(maStart) || resolutionDate.Equal(maStart)) &&
+						(resolutionDate.Before(maEnd) || resolutionDate.Equal(maEnd)) {
+						if _, exists := monthlyAnalyses[i].Analysis[issueType]; !exists {
+							monthlyAnalyses[i].Analysis[issueType] = &TicketAnalysis{
+								IssueType:  issueType,
+								ManaValues: make([]float64, 0),
+							}
+						}
+						monthlyAnalyses[i].Analysis[issueType].Count++
+						monthlyAnalyses[i].Analysis[issueType].TotalMana += manaSpent
+						monthlyAnalyses[i].Analysis[issueType].ManaValues = append(monthlyAnalyses[i].Analysis[issueType].ManaValues, manaSpent)
+						break
+					}
+				}
+			}
 		}
 
 		startAt += len(issues)
@@ -152,11 +297,12 @@ func main() {
 		}
 	}
 
-	// Calculate averages and prepare for sorting
+	// Calculate averages and medians for overall analysis
 	var results []TicketAnalysis
 	for _, a := range analysis {
 		if a.Count > 0 {
 			a.AverageMana = a.TotalMana / float64(a.Count)
+			a.MedianMana = calculateMedian(a.ManaValues)
 		}
 		results = append(results, *a)
 	}
@@ -166,16 +312,31 @@ func main() {
 		return results[i].TotalMana > results[j].TotalMana
 	})
 
-	// Print results
-	fmt.Printf("\nAnalysis Period: %s to %s\n\n", *startDate, *endDate)
-	fmt.Printf("%-20s %-10s %-15s %-15s\n", "Issue Type", "Count", "Total Mana", "Avg Mana")
-	fmt.Println(strings.Repeat("-", 65))
+	// Print header information
+	fmt.Printf("\nAnalysis Period: %s to %s\n", *startDate, *endDate)
+	fmt.Printf("Project: %s\n", *projectKey)
+	fmt.Printf("\nJQL Query:\n%s\n", jql)
 
-	for _, r := range results {
-		fmt.Printf("%-20s %-10d %-15.2f %-15.2f\n",
-			r.IssueType,
-			r.Count,
-			r.TotalMana,
-			r.AverageMana)
+	if *monthly {
+		// Print monthly breakdowns
+		for _, ma := range monthlyAnalyses {
+			var monthResults []TicketAnalysis
+			for _, a := range ma.Analysis {
+				if a.Count > 0 {
+					a.AverageMana = a.TotalMana / float64(a.Count)
+					a.MedianMana = calculateMedian(a.ManaValues)
+				}
+				monthResults = append(monthResults, *a)
+			}
+			sort.Slice(monthResults, func(i, j int) bool {
+				return monthResults[i].TotalMana > monthResults[j].TotalMana
+			})
+			printAnalysisTable(monthResults, fmt.Sprintf("Month: %s", ma.Month.Format("January 2006")))
+		}
+
+		// Print overall summary
+		fmt.Printf("\nOVERALL SUMMARY:\n")
 	}
+
+	printAnalysisTable(results, "")
 }
