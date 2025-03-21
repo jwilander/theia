@@ -72,8 +72,8 @@ func getManaPoints(manaValue interface{}) float64 {
 // normalizeIssueType converts Task and Sub-task types to Story
 func normalizeIssueType(issueType string) string {
 	switch issueType {
-	case "Task", "Sub-task":
-		return "Story"
+	case "Story", "Task", "Sub-task":
+		return "Story (incl. tasks)"
 	default:
 		return issueType
 	}
