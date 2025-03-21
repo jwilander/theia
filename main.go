@@ -241,7 +241,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "teams"},
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "team"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
@@ -273,8 +273,10 @@ func main() {
 			// Update team analysis if enabled
 			if *teams {
 				team := "No Team"
-				if teamField, ok := issue.Fields.Unknowns["teams"].(string); ok && teamField != "" {
-					team = teamField
+				if teamField := issue.Fields.Unknowns["team"]; teamField != nil {
+					if teamName, ok := teamField.(string); ok && teamName != "" {
+						team = teamName
+					}
 				}
 
 				// Find or create team analysis
