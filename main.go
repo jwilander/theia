@@ -133,14 +133,16 @@ func printAnalysisTable(results []TicketAnalysis, period string) {
 	// Print results
 	for _, r := range results {
 		percentOfTotal := 0.0
+		percentOfTotalStr := ""
 		if totalMana > 0 {
 			percentOfTotal = (r.TotalMana / totalMana) * 100
+			percentOfTotalStr = fmt.Sprintf("%4.1f%%", percentOfTotal)
 		}
-		fmt.Printf("%-20s %-10d %-15.2f %-15.1f%% %-15.2f %-15.2f\n",
+		fmt.Printf("%-20s %-10d %-15.2f %-15s %-15.2f %-15.2f\n",
 			r.IssueType,
 			r.Count,
 			r.TotalMana,
-			percentOfTotal,
+			percentOfTotalStr,
 			r.AverageMana,
 			r.MedianMana)
 	}
