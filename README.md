@@ -48,6 +48,9 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -monthly
 
 # For team breakdown
 go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams
+
+# For broken windows analysis
+go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -broken-windows
 ```
 
 ### Command Line Arguments
@@ -57,6 +60,7 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams
 - `-end`: End date in YYYY-MM-DD format
 - `-monthly`: Optional flag to show month-by-month breakdown
 - `-teams`: Optional flag to group results by team
+- `-broken-windows`: Optional flag to consider tickets with "ux-broken-window" label as a separate type
 
 ## Output
 
