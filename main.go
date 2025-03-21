@@ -26,6 +26,11 @@ type MonthlyAnalysis struct {
 	Analysis map[string]*TicketAnalysis
 }
 
+type TeamAnalysis struct {
+	Team     string
+	Analysis map[string]*TicketAnalysis
+}
+
 // getManaPoints converts the Mana Spent select value to story points
 func getManaPoints(manaValue interface{}) float64 {
 	if manaValue == nil {
@@ -150,6 +155,7 @@ func main() {
 	endDate := flag.String("end", "", "End date (YYYY-MM-DD)")
 	projectKey := flag.String("project", "", "JIRA project key (e.g., PROJ)")
 	monthly := flag.Bool("monthly", false, "Show monthly breakdown")
+	teams := flag.Bool("teams", false, "Group results by team")
 	flag.Parse()
 
 	// Validate flags
@@ -204,6 +210,13 @@ func main() {
 	// Initialize analysis maps
 	analysis := make(map[string]*TicketAnalysis)
 	var monthlyAnalyses []MonthlyAnalysis
+	var teamAnalyses []TeamAnalysis
+
+	if *teams {
+		// We'll populate the teams as we find them
+		teamAnalyses = make([]TeamAnalysis, 0)
+	}
+
 	if *monthly {
 		// Create a map for each month in the date range
 		current := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, start.Location())
@@ -228,7 +241,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate"},
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "teams"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
@@ -256,6 +269,41 @@ func main() {
 			analysis[issueType].Count++
 			analysis[issueType].TotalMana += manaSpent
 			analysis[issueType].ManaValues = append(analysis[issueType].ManaValues, manaSpent)
+
+			// Update team analysis if enabled
+			if *teams {
+				team := "No Team"
+				if teamField, ok := issue.Fields.Unknowns["teams"].(string); ok && teamField != "" {
+					team = teamField
+				}
+
+				// Find or create team analysis
+				var teamAnalysis *TeamAnalysis
+				for i := range teamAnalyses {
+					if teamAnalyses[i].Team == team {
+						teamAnalysis = &teamAnalyses[i]
+						break
+					}
+				}
+				if teamAnalysis == nil {
+					teamAnalyses = append(teamAnalyses, TeamAnalysis{
+						Team:     team,
+						Analysis: make(map[string]*TicketAnalysis),
+					})
+					teamAnalysis = &teamAnalyses[len(teamAnalyses)-1]
+				}
+
+				// Update team's issue type analysis
+				if _, exists := teamAnalysis.Analysis[issueType]; !exists {
+					teamAnalysis.Analysis[issueType] = &TicketAnalysis{
+						IssueType:  issueType,
+						ManaValues: make([]float64, 0),
+					}
+				}
+				teamAnalysis.Analysis[issueType].Count++
+				teamAnalysis.Analysis[issueType].TotalMana += manaSpent
+				teamAnalysis.Analysis[issueType].ManaValues = append(teamAnalysis.Analysis[issueType].ManaValues, manaSpent)
+			}
 
 			// Update monthly analysis if enabled
 			if *monthly {
@@ -308,7 +356,31 @@ func main() {
 	fmt.Printf("Project: %s\n", *projectKey)
 	fmt.Printf("\nJQL Query:\n%s\n", jql)
 
-	if *monthly {
+	if *teams {
+		// Sort teams alphabetically
+		sort.Slice(teamAnalyses, func(i, j int) bool {
+			return teamAnalyses[i].Team < teamAnalyses[j].Team
+		})
+
+		// Print team breakdowns
+		for _, ta := range teamAnalyses {
+			var teamResults []TicketAnalysis
+			for _, a := range ta.Analysis {
+				if a.Count > 0 {
+					a.AverageMana = a.TotalMana / float64(a.Count)
+					a.MedianMana = calculateMedian(a.ManaValues)
+				}
+				teamResults = append(teamResults, *a)
+			}
+			sort.Slice(teamResults, func(i, j int) bool {
+				return teamResults[i].TotalMana > teamResults[j].TotalMana
+			})
+			printAnalysisTable(teamResults, fmt.Sprintf("Team: %s", ta.Team))
+		}
+
+		// Print overall summary
+		fmt.Printf("\nOVERALL SUMMARY:\n")
+	} else if *monthly {
 		// Print monthly breakdowns
 		for _, ma := range monthlyAnalyses {
 			var monthResults []TicketAnalysis

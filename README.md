@@ -45,6 +45,9 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ"
 
 # For monthly breakdown
 go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -monthly
+
+# For team breakdown
+go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams
 ```
 
 ### Command Line Arguments
@@ -53,6 +56,7 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -monthly
 - `-start`: Start date in YYYY-MM-DD format
 - `-end`: End date in YYYY-MM-DD format
 - `-monthly`: Optional flag to show month-by-month breakdown
+- `-teams`: Optional flag to group results by team
 
 ## Output
 
@@ -62,13 +66,16 @@ The tool will output:
 3. If `-monthly` flag is used:
    - A breakdown table for each month in the date range
    - An overall summary table at the end
-4. Each table shows:
+4. If `-teams` flag is used:
+   - A breakdown table for each team
+   - An overall summary table at the end
+5. Each table shows:
    - Issue Type
    - Count of issues
    - Total Mana spent
    - Average Mana per issue type
    - Median Mana per issue type (useful for identifying typical effort without outlier impact)
-5. A totals row showing:
+6. A totals row showing:
    - Total count of all issues
    - Total Mana across all types
    - Overall average Mana per issue
