@@ -278,11 +278,15 @@ func main() {
 				fmt.Printf("  Raw Team Field: %+v\n", issue.Fields.Unknowns["customfield_10001"])
 				if teamField := issue.Fields.Unknowns["customfield_10001"]; teamField != nil {
 					fmt.Printf("  Team Field Type: %T\n", teamField)
-					if teamName, ok := teamField.(string); ok && teamName != "" {
-						team = teamName
-						fmt.Printf("  Parsed Team Name: %s\n", team)
+					if teamObj, ok := teamField.(map[string]interface{}); ok {
+						if teamName, ok := teamObj["name"].(string); ok && teamName != "" {
+							team = teamName
+							fmt.Printf("  Parsed Team Name: %s\n", team)
+						} else {
+							fmt.Printf("  Could not get team name from object\n")
+						}
 					} else {
-						fmt.Printf("  Could not parse team field as string\n")
+						fmt.Printf("  Could not parse team field as object\n")
 					}
 				} else {
 					fmt.Printf("  Team field is nil\n")
