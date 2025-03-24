@@ -51,6 +51,9 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams
 
 # For broken windows analysis
 go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -broken-windows
+
+# For security vulnerabilities analysis
+go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -security
 ```
 
 ### Command Line Arguments
@@ -61,6 +64,7 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -broken-win
 - `-monthly`: Optional flag to show month-by-month breakdown
 - `-teams`: Optional flag to group results by team
 - `-broken-windows`: Optional flag to consider tickets with "ux-broken-window" label as a separate type
+- `-security`: Optional flag to consider tickets with "security" label as a separate type called "Security Vuln."
 
 ## Output
 

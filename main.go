@@ -166,6 +166,7 @@ func main() {
 	monthly := flag.Bool("monthly", false, "Show monthly breakdown")
 	teams := flag.Bool("teams", false, "Group results by team")
 	brokenWindows := flag.Bool("broken-windows", false, "Consider tickets with ux-broken-window label as separate type")
+	security := flag.Bool("security", false, "Consider tickets with security label as separate type")
 	flag.Parse()
 
 	// Validate flags
@@ -247,7 +248,7 @@ func main() {
 		searchOpts := &jira.SearchOptions{
 			StartAt:    startAt,
 			MaxResults: 50,
-			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "customfield_10800", "labels"},
+			Fields:     []string{"issuetype", "customfield_11267", "resolutiondate", "customfield_10800", "labels", "issuelinks"},
 		}
 
 		issues, resp, err := client.Issue.Search(jql, searchOpts)
@@ -268,6 +269,20 @@ func main() {
 				for _, label := range issue.Fields.Labels {
 					if label == "ux-broken-window" {
 						issueType = "Broken Window"
+						break
+					}
+				}
+			}
+
+			// Check for linked Product Vulnerability tickets if flag is enabled
+			if *security && issueType != "Broken Window" {
+				for _, link := range issue.Fields.IssueLinks {
+					if link.OutwardIssue != nil && link.OutwardIssue.Fields != nil && link.OutwardIssue.Fields.Type.Name == "Product Vulnerability" {
+						issueType = "Security Vuln."
+						break
+					}
+					if link.InwardIssue != nil && link.InwardIssue.Fields != nil && link.InwardIssue.Fields.Type.Name == "Product Vulnerability" {
+						issueType = "Security Vuln."
 						break
 					}
 				}
