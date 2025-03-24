@@ -14,17 +14,19 @@ import (
 )
 
 type TicketAnalysis struct {
-	IssueType   string
-	Count       int
-	TotalMana   float64
-	AverageMana float64
-	MedianMana  float64
-	ManaValues  []float64 // Store individual mana values for median calculation
+	IssueType     string
+	Count         int
+	TotalMana     float64
+	AverageMana   float64
+	MedianMana    float64
+	ManaValues    []float64 // Store individual mana values for median calculation
+	ZeroManaCount int
 }
 
 type MonthlyAnalysis struct {
-	Month    time.Time
-	Analysis map[string]*TicketAnalysis
+	Month         time.Time
+	Analysis      map[string]*TicketAnalysis
+	ZeroManaCount int
 }
 
 type TeamAnalysis struct {
@@ -216,7 +218,7 @@ func runTicketCommand() {
 	// Create base JQL query
 	jql := fmt.Sprintf(`project = "%s" AND
 		status in (Resolved, Closed) AND
-		resolution not in ("Won't Do", "Invalid", "Duplicate") AND
+		resolution not in ("Won't Do", "Invalid", "Duplicate", "Won't Fix", "Declined") AND
 		resolutiondate >= "%s" AND
 		resolutiondate <= "%s" AND
 		"Mana Spent" is not EMPTY AND
@@ -309,6 +311,9 @@ func runTicketCommand() {
 			analysis[issueType].Count++
 			analysis[issueType].TotalMana += manaSpent
 			analysis[issueType].ManaValues = append(analysis[issueType].ManaValues, manaSpent)
+			if manaSpent == 0 {
+				analysis[issueType].ZeroManaCount++
+			}
 
 			// Update team analysis if enabled
 			if *teams {
@@ -366,6 +371,9 @@ func runTicketCommand() {
 							}
 						}
 						monthlyAnalyses[i].Analysis[issueType].Count++
+						if manaSpent == 0 {
+							monthlyAnalyses[i].ZeroManaCount++
+						}
 						monthlyAnalyses[i].Analysis[issueType].TotalMana += manaSpent
 						monthlyAnalyses[i].Analysis[issueType].ManaValues = append(monthlyAnalyses[i].Analysis[issueType].ManaValues, manaSpent)
 						break
@@ -394,6 +402,12 @@ func runTicketCommand() {
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].TotalMana > results[j].TotalMana
 	})
+
+	// Calculate total zero mana tickets
+	var totalZeroMana int
+	for _, result := range results {
+		totalZeroMana += result.ZeroManaCount
+	}
 
 	// Print header information
 	fmt.Printf("\nAnalysis Period: %s to %s\n", *startDate, *endDate)
@@ -439,6 +453,8 @@ func runTicketCommand() {
 				return monthResults[i].TotalMana > monthResults[j].TotalMana
 			})
 			printAnalysisTable(monthResults, fmt.Sprintf("Month: %s", ma.Month.Format("January 2006")))
+			// Print zero mana tickets for this month
+			fmt.Printf("  Zero Mana Tickets: %d\n", ma.ZeroManaCount)
 		}
 
 		// Print overall summary
@@ -446,6 +462,7 @@ func runTicketCommand() {
 	}
 
 	printAnalysisTable(results, "")
+	fmt.Printf("  Zero Mana Tickets: %d\n", totalZeroMana)
 }
 
 func runEpicCommand() {
@@ -543,7 +560,7 @@ func runEpicCommand() {
 			// Search for tickets that have this epic as their epic link
 			childJQL := fmt.Sprintf(`project = "%s" AND "Epic Link" = "%s" AND "Mana Spent" is not EMPTY`,
 				*projectKey, issue.Key)
-			childJQL = fmt.Sprintf(`%s AND resolution not in ("Won't Do", "Invalid", "Duplicate")`, childJQL)
+			childJQL = fmt.Sprintf(`%s AND resolution not in ("Won't Do", "Invalid", "Duplicate", "Won't Fix", "Declined")`, childJQL)
 
 			// Search for child tickets in bulk
 			var childStartAt int
@@ -574,6 +591,7 @@ func runEpicCommand() {
 					manaSpent := getManaPoints(manaField)
 					if manaSpent == 0 {
 						zeroManaCount++
+						fmt.Printf("  Debug: Zero mana ticket in epic %s - %s/browse/%s\n", issue.Key, jiraURL, child.Key)
 					}
 					totalManaSpent += manaSpent
 					childManaValues = append(childManaValues, manaSpent)
