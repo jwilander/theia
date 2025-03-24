@@ -158,7 +158,7 @@ func printAnalysisTable(results []TicketAnalysis, period string) {
 		overallMedianMana)
 }
 
-func main() {
+func runTicketCommand() {
 	// Command line flags
 	startDate := flag.String("start", "", "Start date (YYYY-MM-DD)")
 	endDate := flag.String("end", "", "End date (YYYY-MM-DD)")
@@ -166,7 +166,7 @@ func main() {
 	monthly := flag.Bool("monthly", false, "Show monthly breakdown")
 	teams := flag.Bool("teams", false, "Group results by team")
 	brokenWindows := flag.Bool("broken-windows", false, "Consider tickets with ux-broken-window label as separate type")
-	security := flag.Bool("security", false, "Consider tickets with security label as separate type")
+	security := flag.Bool("security", false, "Consider tickets linked to Product Vulnerability issues as a separate type")
 	flag.Parse()
 
 	// Validate flags
@@ -438,4 +438,29 @@ func main() {
 	}
 
 	printAnalysisTable(results, "")
+}
+
+func runEpicCommand() {
+	fmt.Println("Epic analysis functionality coming soon!")
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Expected subcommand: ticket or epic")
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "ticket":
+		// Remove the "ticket" subcommand from os.Args
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+		runTicketCommand()
+	case "epic":
+		// Remove the "epic" subcommand from os.Args
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+		runEpicCommand()
+	default:
+		fmt.Println("Expected subcommand: ticket or epic")
+		os.Exit(1)
+	}
 }

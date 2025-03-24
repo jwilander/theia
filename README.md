@@ -40,23 +40,31 @@ export JIRA_TOKEN="your-api-token"
 ## Usage
 
 ```bash
-# For overall analysis
-go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ"
+# For ticket analysis
+go run main.go ticket -start "2024-01-01" -end "2024-03-21" -project "PROJ"
 
-# For monthly breakdown
-go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -monthly
+# For monthly ticket breakdown
+go run main.go ticket -start "2024-01-01" -end "2024-03-21" -project "PROJ" -monthly
 
-# For team breakdown
-go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams
+# For team ticket breakdown
+go run main.go ticket -start "2024-01-01" -end "2024-03-21" -project "PROJ" -teams
 
 # For broken windows analysis
-go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -broken-windows
+go run main.go ticket -start "2024-01-01" -end "2024-03-21" -project "PROJ" -broken-windows
 
 # For security vulnerabilities analysis
-go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -security
+go run main.go ticket -start "2024-01-01" -end "2024-03-21" -project "PROJ" -security
+
+# For epic analysis (coming soon)
+go run main.go epic
 ```
 
-### Command Line Arguments
+### Commands
+
+- `ticket`: Analyze ticket types and their mana consumption
+- `epic`: Analyze epic mana consumption (coming soon)
+
+### Command Line Arguments (for ticket command)
 
 - `-project`: JIRA project key (e.g., "PROJ", "TEAM", etc.)
 - `-start`: Start date in YYYY-MM-DD format
@@ -64,7 +72,7 @@ go run main.go -start "2024-01-01" -end "2024-03-21" -project "PROJ" -security
 - `-monthly`: Optional flag to show month-by-month breakdown
 - `-teams`: Optional flag to group results by team
 - `-broken-windows`: Optional flag to consider tickets with "ux-broken-window" label as a separate type
-- `-security`: Optional flag to consider tickets with "security" label as a separate type called "Security Vuln."
+- `-security`: Optional flag to consider tickets linked to Product Vulnerability issues as a separate type called "Security Vuln."
 
 ## Output
 
