@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -156,6 +157,13 @@ func printAnalysisTable(results []TicketAnalysis, period string) {
 		"100.0%",
 		overallAvgMana,
 		overallMedianMana)
+}
+
+// removeEmojis removes emoji characters from a string
+func removeEmojis(s string) string {
+	// This regex matches emoji characters
+	emojiRegex := regexp.MustCompile(`[\x{1F300}-\x{1F9FF}]|[\x{2600}-\x{27BF}]|[\x{FE00}-\x{FE0F}]|[\x{1F000}-\x{1F644}]|[\x{1F680}-\x{1F6FF}]|[\x{2702}-\x{27B0}]|[\x{24C2}-\x{1F251}]|[\x{1F900}-\x{1F9FF}]|[\x{1F1E0}-\x{1F1FF}]|[\x{2194}-\x{2199}]|[\x{2B05}-\x{2B07}]|[\x{2934}-\x{2935}]|[\x{3030}]|[\x{FE0F}]|[\x{20E3}]`)
+	return strings.TrimSpace(emojiRegex.ReplaceAllString(s, ""))
 }
 
 func runTicketCommand() {
@@ -486,10 +494,13 @@ func runEpicCommand() {
 	// Create JQL query for epics with activity in the date range
 	jql := fmt.Sprintf(`project = "%s" AND
 		issuetype = Epic AND
-		status in (Resolved, Closed) AND
-		resolution not in ("Won't Do", "Invalid", "Duplicate") AND
-		resolutiondate >= "%s" AND
-		resolutiondate <= "%s" AND
+		(
+			(status = "GA Release") OR
+			(status in (Resolved, Closed) AND
+			resolution not in ("Won't Do", "Invalid", "Duplicate") AND
+			resolutiondate >= "%s" AND
+			resolutiondate <= "%s")
+		) AND
 		"Team[Team]" IS NOT EMPTY
 		ORDER BY created DESC`,
 		*projectKey,
@@ -503,6 +514,7 @@ func runEpicCommand() {
 		Summary          string
 		Status           string
 		TotalTickets     int
+		ZeroManaTickets  int
 		TotalMana        float64
 		AvgManaPerTicket float64
 		MedianMana       float64
@@ -531,23 +543,23 @@ func runEpicCommand() {
 			// Search for tickets that have this epic as their epic link
 			childJQL := fmt.Sprintf(`project = "%s" AND "Epic Link" = "%s" AND "Mana Spent" is not EMPTY`,
 				*projectKey, issue.Key)
+			childJQL = fmt.Sprintf(`%s AND resolution not in ("Won't Do", "Invalid", "Duplicate")`, childJQL)
 
 			// Search for child tickets in bulk
 			var childStartAt int
 			var totalManaSpent float64
 			var totalChildren int
+			var zeroManaCount int
 			var childManaValues []float64
 			for {
 				childSearchOpts := &jira.SearchOptions{
 					StartAt:    childStartAt,
 					MaxResults: 50,
-					Fields:     []string{"customfield_11267", "status"},
 				}
 
-				children, childResp, err := client.Issue.Search(childJQL, childSearchOpts)
+				children, resp, err := client.Issue.Search(childJQL, childSearchOpts)
 				if err != nil {
-					log.Printf("Error searching child tickets for epic %s: %v", issue.Key, err)
-					break
+					log.Fatalf("Error searching child tickets: %v", err)
 				}
 
 				if len(children) == 0 {
@@ -560,12 +572,15 @@ func runEpicCommand() {
 				for _, child := range children {
 					manaField := child.Fields.Unknowns["customfield_11267"]
 					manaSpent := getManaPoints(manaField)
+					if manaSpent == 0 {
+						zeroManaCount++
+					}
 					totalManaSpent += manaSpent
 					childManaValues = append(childManaValues, manaSpent)
 				}
 
 				childStartAt += len(children)
-				if childStartAt >= childResp.Total {
+				if childStartAt >= resp.Total {
 					break
 				}
 			}
@@ -594,14 +609,16 @@ func runEpicCommand() {
 				Summary          string
 				Status           string
 				TotalTickets     int
+				ZeroManaTickets  int
 				TotalMana        float64
 				AvgManaPerTicket float64
 				MedianMana       float64
 			}{
 				Key:              issue.Key,
-				Summary:          issue.Fields.Summary,
+				Summary:          removeEmojis(issue.Fields.Summary),
 				Status:           issue.Fields.Status.Name,
 				TotalTickets:     totalChildren,
+				ZeroManaTickets:  zeroManaCount,
 				TotalMana:        totalManaSpent,
 				AvgManaPerTicket: avgManaPerTicket,
 				MedianMana:       medianManaPerTicket,
@@ -638,26 +655,34 @@ func runEpicCommand() {
 	// Print header information
 	fmt.Printf("\nEpic Analysis Period: %s to %s\n", *startDate, *endDate)
 	fmt.Printf("Project: %s\n", *projectKey)
-	fmt.Printf("\nJQL Query:\n%s\n", jql)
+	fmt.Printf("\nEpics JQL Query:\n%s\n", jql)
+	fmt.Printf("\nChildren JQL Query (per epic):\n" +
+		`project = "PROJECT_KEY" AND ` +
+		`"Epic Link" = "EPIC_KEY" AND ` +
+		`"Mana Spent" is not EMPTY AND ` +
+		`resolution not in ("Won't Do", "Invalid", "Duplicate")` +
+		"\n")
 
 	// Print epic details table
 	fmt.Printf("\nEpic Details:\n")
-	fmt.Printf("%-15s %-60s %-15s %-15s %-15s %-15s %-15s\n",
+	fmt.Printf("%-15s %-60s %-15s %-15s %-20s %-15s %-15s %-15s\n",
 		"Epic Key",
 		"Summary",
 		"Status",
 		"Total Tickets",
+		"Zero Mana Tickets",
 		"Total Mana",
 		"Avg Mana/Ticket",
 		"Median Mana")
-	fmt.Println(strings.Repeat("-", 155))
+	fmt.Println(strings.Repeat("-", 185))
 
 	for _, epic := range epicDetailsList {
-		fmt.Printf("%-15s %-60s %-15s %-15d %-15.2f %-15.2f %-15.2f\n",
+		fmt.Printf("%-15s %-60s %-15s %-15d %-20d %-15.2f %-15.2f %-15.2f\n",
 			epic.Key,
 			epic.Summary,
 			epic.Status,
 			epic.TotalTickets,
+			epic.ZeroManaTickets,
 			epic.TotalMana,
 			epic.AvgManaPerTicket,
 			epic.MedianMana)
